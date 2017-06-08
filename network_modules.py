@@ -20,15 +20,15 @@ import cmath as c
 #Class  encapsulation of the network model 
 class nmodel:
     def __init__(self, G, x, h, f, M, N, dt = .05):
-        self.G = G #Graph representation of network
-        self.x = x #states
-        self.h = h #node function
-        self.f = f #coupling function
-        self.M = M #measurement matrix
-        self.N = N #Variance for Gaussian noise
-        self.y = self.linear_measure() #measurement vectors
-        self.t = 0 #time
-        self.dt = dt #time step
+        self.G = G # Graph representation of network
+        self.x = np.array([[i] for i in x]) # states 
+        self.h = h # array of node functions
+        self.f = f # array of coupling functions
+        self.M = M # measurement matrix
+        self.N = N # Variance for Gaussian noise
+        self.y = np.array(self.linear_measure()) # measurement vectors
+        self.t = 0 # time
+        self.dt = dt # time step
 
         #checks
         if len(self.x) == 0:
@@ -39,43 +39,44 @@ class nmodel:
             raise ValueError('length of self.x must match number of nodes')
 
     #state derivative
-    def dev(self):
-        if np.iscomplex(self.x).any():
-            dev = np.matrix(np.zeros(len(self.x),dtype=np.complex_)).T
+    def dev(self,state):     
+        if np.iscomplex(state).any():
+            dev = np.matrix(np.zeros(np.shape(state),dtype=np.complex_))
         else:
-            dev = np.matrix(np.zeros(len(self.x))).T
-        for i in range(0,len(self.x)):
-            sumEdge = 0
+            dev = np.matrix(np.zeros(np.shape(state)))
+        for i in range(0,len(state)):
+            sumEdge = np.array(dev[i].tolist()[0])
             if self.G[i+1]:
                 for j in self.G[i+1]:
-                    sumEdge += self.f(self.x[i,-1],self.x[(j-1),-1])
-            dev[i] = self.h(self.x[i,-1]) + sumEdge
+                    sumEdge = sumEdge + f(state[i],state[j-1])
+            dev[i] = h(state[i]) + sumEdge
         return dev
 
     #linear measurement
     def linear_measure(self):
+        
         if self.N == 0:
-            return self.M * self.x[:,-1]
+            return self.M * np.matrix(self.x[:,:,-1])
         else:
-            return self.M * self.x[:,-1] + np.matrix(np.random.normal(0,self.N,len(self.x))).T
+            return self.M * np.matrix(self.x[:,:,-1]) + np.matrix(np.random.normal(0,self.N,np.shape(self.x[:,:,-1]))).T
 
     #euler method approximation of behavior
     def euler_step(self):
-        new_state = self.x[:,-1] + self.dev(self.x[:,-1])*self.dt
+        new_state = self.x[:,:,-1] + self.dev(self.x[:,:,-1])*self.dt
         self.t += self.dt
-        self.x = np.hstack((self.x,new_state))
-        self.y = np.hstack((self.y,self.linear_measure()))
+        self.x = np.dstack((self.x,np.array(new_state)))
+        self.y = np.dstack((self.y,np.array(self.linear_measure())))
 
     #runge-Kutta approximation of behavior
     def runge_kutta_step(self):
-        k1 = self.dev(self.x[:,-1])*self.dt
-        k2 = self.dev(self.x[:,-1]+ .5*k1)*self.dt
-        k3 = self.dev(self.x[:,-1]+ .5*k2)*self.dt
-        k4 = self.dev(self.x[:,-1]+ k3)*self.dt
-        new_state = self.x[:,-1] + (k1+ 2*k2 + 2*k3 + k4)/6
+        k1 = self.dev(self.x[:,:,-1])*self.dt
+        k2 = self.dev(self.x[:,:,-1]+ .5*k1)*self.dt
+        k3 = self.dev(self.x[:,:,-1]+ .5*k2)*self.dt
+        k4 = self.dev(self.x[:,:,-1]+ k3)*self.dt
+        new_state = self.x[:,:,-1] + (k1+ 2*k2 + 2*k3 + k4)/6
         self.t += self.dt
-        self.x = np.hstack((self.x,new_state))
-        self.y = np.hstack((self.y,self.linear_measure(new_state)))
+        self.x = np.dstack((self.x,np.array(new_state)))
+        self.y = np.dstack((self.y,np.array(self.linear_measure())))
 
     #time step function
     def step(self):
@@ -88,8 +89,8 @@ class nmodel:
 
     #clears all states exept initial
     def clear_run(self):
-        self.x = self.x[:,0]
-        self.y = self.y[:,0]
+        self.x = self.x[:,:,0]
+        self.y = self.y[:,:,0]
 
 
 #creates specified states
