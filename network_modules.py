@@ -21,7 +21,7 @@ import cmath as c
 class nmodel:
     def __init__(self, G, x, h, f, M, N, dt = .05):
         self.G = G # Graph representation of network
-        self.x = np.array([[i] for i in x]) # states 
+        self.x = np.array([[i] for i in np.array(x)]) # states 
         self.h = h # array of node functions
         self.f = f # array of coupling functions
         self.M = M # measurement matrix
@@ -48,8 +48,8 @@ class nmodel:
             sumEdge = np.array(dev[i].tolist()[0])
             if self.G[i+1]:
                 for j in self.G[i+1]:
-                    sumEdge = sumEdge + f(state[i],state[j-1])
-            dev[i] = h(state[i]) + sumEdge
+                    sumEdge = sumEdge + self.f(state[i],state[j-1])
+            dev[i] = self.h(state[i]) + sumEdge
         return dev
 
     #linear measurement
@@ -212,7 +212,7 @@ def cross_func(states, func):
     for i in range(len(states)):
         for j in range(len(states)):
             M[i,j] = func(states[i,:],states[j,:])
-    return M
+    return np.matrix(M)
 
 #Source: https://github.com/scikit-learn/scikit-learn/blob/14031f6/sklearn/metrics/cluster/supervised.py#L531
 #Mutual Information
@@ -250,15 +250,18 @@ def mutual_info_score(labels_true, labels_pred, contingency=None):
 
 #PLV
 def phase_locking_value(x,y):
-    complex_phase_diff = np.exp(np.complex(0,1)*(theta1 - theta2))
-    plv = np.abs(np.sum(complex_phase_diff))/len(theta1)
+    complex_phase_diff = np.exp(np.complex(0,1)*(x - y))
+    plv = np.abs(np.sum(complex_phase_diff))/len(x)
     return plv
 
 #coherence
 coh = sig.coherence
 
 #correlation
-cor = sig.correlate
+cor = np.correlate
+
+#get time courses from specified part of the vector state
+reduce_state = lambda i, x:  np.array([row[i] for row in x])
 
 #Nonlinear measures
 #import nolds.sampen as as sp
