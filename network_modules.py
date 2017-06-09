@@ -21,7 +21,7 @@ import cmath as c
 class nmodel:
     def __init__(self, G, x, h, f, M, N, dt = .05):
         self.G = G # Graph representation of network
-        self.x = np.array([[i] for i in np.array(x)]) # states 
+        self.x = y = np.array([np.array([np.array([j]) for j in i]) for i in np.array(x)]) # states 
         self.h = h # array of node functions
         self.f = f # array of coupling functions
         self.M = M # measurement matrix
@@ -39,7 +39,7 @@ class nmodel:
             raise ValueError('length of self.x must match number of nodes')
 
     #state derivative
-    def dev(self,state):     
+    def dev(self,state):  
         if np.iscomplex(state).any():
             dev = np.matrix(np.zeros(np.shape(state),dtype=np.complex_))
         else:
@@ -48,17 +48,16 @@ class nmodel:
             sumEdge = np.array(dev[i].tolist()[0])
             if self.G[i+1]:
                 for j in self.G[i+1]:
-                    sumEdge = sumEdge + self.f(state[i],state[j-1])
+                    sumEdge += self.f(state[i],state[j-1])
             dev[i] = self.h(state[i]) + sumEdge
         return dev
 
     #linear measurement
-    def linear_measure(self):
-        
+    def linear_measure(self):  
         if self.N == 0:
             return self.M * np.matrix(self.x[:,:,-1])
         else:
-            return self.M * np.matrix(self.x[:,:,-1]) + np.matrix(np.random.normal(0,self.N,np.shape(self.x[:,:,-1]))).T
+            return self.M * np.matrix(self.x[:,:,-1]) + np.matrix(np.random.normal(0,self.N,np.shape(self.x[:,:,-1])))
 
     #euler method approximation of behavior
     def euler_step(self):
@@ -70,9 +69,9 @@ class nmodel:
     #runge-Kutta approximation of behavior
     def runge_kutta_step(self):
         k1 = self.dev(self.x[:,:,-1])*self.dt
-        k2 = self.dev(self.x[:,:,-1]+ .5*k1)*self.dt
-        k3 = self.dev(self.x[:,:,-1]+ .5*k2)*self.dt
-        k4 = self.dev(self.x[:,:,-1]+ k3)*self.dt
+        k2 = self.dev(np.array(self.x[:,:,-1]+ .5*k1))*self.dt
+        k3 = self.dev(np.array(self.x[:,:,-1]+ .5*k2))*self.dt
+        k4 = self.dev(np.array(self.x[:,:,-1]+ k3))*self.dt
         new_state = self.x[:,:,-1] + (k1+ 2*k2 + 2*k3 + k4)/6
         self.t += self.dt
         self.x = np.dstack((self.x,np.array(new_state)))
@@ -80,7 +79,7 @@ class nmodel:
 
     #time step function
     def step(self):
-        self.euler_step()
+        self.runge_kutta_step()
 
     #runs model for time T and stores states
     def run(self,T):
@@ -89,9 +88,12 @@ class nmodel:
 
     #clears all states exept initial
     def clear_run(self):
-        self.x = self.x[:,:,0]
+        self.x = np.array([np.array([np.array([int(j)]) for j in i]) for i in self.x[:,:,0]])
         self.y = self.y[:,:,0]
 
+
+#lambda function for creating vectorized distributions
+create_vec_states = lambda param: np.concatenate((np.array([create_states(*tup) for tup in param])),axis = 1)
 
 #creates specified states
 #n: number of states
@@ -261,7 +263,7 @@ coh = sig.coherence
 cor = np.correlate
 
 #get time courses from specified part of the vector state
-reduce_state = lambda i, x:  np.array([row[i] for row in x])
+reduce_state = lambda i, x:  np.matrix([row[i] for row in x])
 
 #Nonlinear measures
 #import nolds.sampen as as sp
