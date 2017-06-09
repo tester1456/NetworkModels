@@ -14,7 +14,7 @@ import networkx as nx
 import numpy as np
 import scipy.signal as sig
 import matplotlib.pyplot as plt
-import cmath as c
+import collections as col
 
 
 #Class  encapsulation of the network model 
@@ -44,12 +44,29 @@ class nmodel:
             dev = np.matrix(np.zeros(np.shape(state),dtype=np.complex_))
         else:
             dev = np.matrix(np.zeros(np.shape(state)))
+        c = 0 # counter if f depends on the edge
         for i in range(0,len(state)):
             sumEdge = np.array(dev[i].tolist()[0])
             if self.G[i+1]:
                 for j in self.G[i+1]:
-                    sumEdge += self.f(state[i],state[j-1])
-            dev[i] = self.h(state[i]) + sumEdge
+                    if isinstance(self.f, col.Iterable):
+                        if len(self.f) == len(self.x):
+                            sumEdge += self.f[i](state[i],state[j-1])
+                        elif len(self.f) == self.G.number_of_edges():
+                            sumEdge += self.f[c](state[i],state[j-1])
+                            c += 1
+                        else:
+                            raise ValueError('length of f must either be equal to the number of nodes or edges')
+                    elif callable(self.f):
+                        sumEdge += self.f(state[i],state[j-1])
+                    else:
+                        raise ValueError('f must be either be iterable or callable')
+            if isinstance(self.h, col.Iterable):
+                dev[i] = self.h[i](state[i]) + sumEdge
+            elif callable(self.h):
+                dev[i] = self.h(state[i]) + sumEdge
+            else:
+                raise ValueError('h must be either be iterable or callable')
         return dev
 
     #linear measurement
