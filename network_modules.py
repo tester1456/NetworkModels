@@ -274,7 +274,7 @@ def phase_locking_value(x,y):
     return plv
 
 #coherence
-coh = sig.coherence
+coh = lambda x,y: np.mean(sig.coherence(x,y)[1])
 
 #correlation
 cor = np.correlate
