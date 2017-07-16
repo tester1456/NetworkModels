@@ -20,6 +20,7 @@ import collections as col
 #Class  encapsulation of the network model 
 class nmodel:
     def __init__(self, G, x, h, f, M, N, dt = .05):
+
         self.G = G # Graph representation of network
         self.x = y = np.array([np.array([np.array([j]) for j in i]) for i in np.array(x)]) # states 
         self.h = h # array of node functions
@@ -144,26 +145,13 @@ def create_states(n, a, b = None, distribution = None, c = (0,0)):
             return np.matrix(np.random.uniform(a,b,n)).T + \
             np.matrix(np.random.uniform(c[0],c[1],n)).T * 1j
 
-#creates specified network: K, SW, BA, SCC(6 nodes)
-#n: number of nodes
-#k: each node is connected to k nearest neighbors in ring topology
-#p: the probability of rewiring each edge
-#m: number of edges to attach from a new node to existing nodes
-def create_network(ntype = '', n = 1, k = 1, p = 1, m = 1):
-    if ntype == 'K':
-        return nx.complete_graph(n)
-    elif ntype == 'SW':
-        return nx.watts_strogatz_graph(n, k, p)
-    elif ntype == 'BA':
-        return nx.barabasi_albert_graph(n, m)
-    elif ntype == 'SCC':
+#create SCC graph
+def create_SCC():
         nodes = [0,1,2,3,4,5]
         G = nx.Graph()
         G.add_nodes_from(nodes)
         G.add_edges_from([(0,1),(1,2),(0,5),(0,2),(2,3),(3,4),(3,5),(4,5)])
         return G
-    else:
-        raise ValueError('not a valid network')
 
 #multiply the input graph by a factor of side
 # nodal: probability of connectivity in nodes
