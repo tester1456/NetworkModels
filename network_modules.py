@@ -19,7 +19,7 @@ import collections as col
 
 #Class  encapsulation of the network model 
 class nmodel:
-    def __init__(self, G, x, h, f, M, N, dt = .05):
+    def __init__(self, G, x, h, f, M = None, N, dt = .05):
 
         self.G = G # Graph representation of network
         self.x = y = np.array([np.array([np.array([j]) for j in i]) for i in np.array(x)]) # states 
@@ -71,7 +71,9 @@ class nmodel:
         return dev
 
     #linear measurement
-    def linear_measure(self):  
+    def linear_measure(self): 
+        if self.M == None:
+            self.M = np.identity(len(self.x)) 
         if self.N == 0:
             return self.M * np.matrix(self.x[:,:,-1])
         else:

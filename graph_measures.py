@@ -4,11 +4,11 @@ import networkx as nx
 import collections
 import scipy.signal as sig
 import scipy.stats as stats
-import statsmodels
+import statsmodels.tsa.stattools
 import scipy.linalg as lin
 import math
 from scipy.fftpack import fft,fftfreq
-
+import itertools
 
 #plot degree distribution of graph
 def degree_distribution(G):    
@@ -37,7 +37,6 @@ def jaccard(A, B):
 
 #graph similarity index
 def cosine(A,B):
-    import itertools
     mag = lambda x: np.sqrt(np.dot(x,x))
     test_z = lambda arr: all(x == 0 for x in itertools.chain(*arr))
     if test_z(A) or test_z(B):
@@ -63,7 +62,7 @@ def cross_func(states, func):
             val = func(states[i,:],states[j,:])
             M[i,j] = val
             M[j,i] = val
-    return np.matrix(M)
+    return M
 
 #phase synchrony measure
 def phase_synchrony(X,Y):
@@ -71,27 +70,24 @@ def phase_synchrony(X,Y):
     return ps
 
 #correlation
-correlation = lambda X,Y: np.correlate(np.array(X)[0],np.array(Y)[0])[0]/(len(np.array(X)[0]))
+correlation = lambda X,Y: np.real(np.correlate(X,Y)/len(X))
 
 #coherence
-coherence = lambda X,Y: max(sig.coherence(np.array(X)[0],np.array(Y)[0])[1])
+coherence = lambda X,Y: max(sig.coherence(X,Y)[1])
 
 #mutual information measure using KNN Kraskov 2004
-def kraskov_mi(X, Y, k, est = 1):
+def kraskov_mi(X, Y, k = 1, est = 1):
     from scipy.special import digamma
     
-    if len(X[0]) != len(Y[0]):
-        raise ValueError('length of X and Y must match')
-    
-    n = len(X[0])
+    n = len(X)
     dx = np.zeros((n,n))
     dy = np.zeros((n,n))
     dz = np.zeros((n,n))
     
     for i in range(n):
         for j in range(n):
-            dx[i,j] = np.sqrt(sum(X[:,i] - X[:,j])**2)
-            dy[i,j] = np.sqrt(sum(Y[:,i] - Y[:,j])**2)
+            dx[i,j] = np.sqrt((X[i] - X[j])**2)
+            dy[i,j] = np.sqrt((Y[i] - Y[j])**2)
             dz[i,j] = max(dx[i,j],dy[i,j])
     
     nx = np.zeros((n,1))
@@ -125,48 +121,46 @@ def kernel_TE(X, Y):
     yn1 = Y[1:]
     n = len(xn)
     
-    gauss_ker = lambda x,o: np.exp(-((x/o)**2)/2)/(o*np.sqrt(2*np.pi))
+    gauss_ker = lambda x,o: np.exp(-.5*(x/o)**2)/(o*np.sqrt(2*np.pi))
     oxn = 1.06*np.std(xn)*n**.2
     oyn = 1.06*np.std(yn)*n**.2
     oyn1 = 1.06*np.std(yn1)*n**.2
     
     TE = 0
+    
+    xnk = np.array([gauss_ker(xn-xn[i],oxn) for i in range(n)])
+    ynk = np.array([gauss_ker(yn-yn[i],oyn) for i in range(n)])
+    yn1k = np.array([gauss_ker(yn1-yn1[i],oyn1) for i in range(n)])
+    total = sum(sum(xnk*ynk*yn1k))
+    xnk = xnk/total
+    ynk = ynk/total
+    yn1k = yn1k/total
+
     for i in range(n):
-        for j in range(n):
-            for k in range(n):
-                pxnynyn1 = sum(gauss_ker(xn-xn[i],oxn)*gauss_ker(yn-yn[j],oyn)*gauss_ker(yn1-yn1[k],oyn1))/n
-                pxnyn = sum(gauss_ker(xn-xn[i],oxn)*gauss_ker(yn-yn[j],oyn))/n
-                pynyn1 = sum(gauss_ker(yn-yn[j],oyn)*gauss_ker(yn1-yn1[k],oyn1))/n
-                pyn = sum(gauss_ker(yn-yn[j],oyn))/n
-                TE += pxnynyn1 * np.log2(pxnynyn1*pyn/(pxnyn*pynyn1))
+        pxnynyn1 = sum(xnk[i]*ynk[i]*yn1k[i])/n
+        pxnyn = sum(xnk[i]*ynk[i])/n
+        pynyn1 = sum(ynk[i]*yn1k[i])/n
+        pyn = sum(ynk[i])/n
+        TE += pxnynyn1 * np.log2(pxnynyn1*pyn/(pxnyn*pynyn1))
     return TE
 
 #granger causality of X onto Y
-granger_causality = lambda X,Y,ml: statsmodels.tsa.stattools.grangercausalitytests(np.stack((Y,X),1), maxlag = ml, verbose = False)
+def granger_causality(X,Y,ml = 1): 
+    results = statsmodels.tsa.stattools.grangercausalitytests(np.stack((Y,X),1), maxlag = ml, verbose = False)
+    p_vals = [val[0]['params_ftest'][1] for key,val in results.items()]
+    return min(p_vals)
 
 #pearson correlation coefficient
-coeff_determination = lambda X,Y: stats.pearsonr(X,Y)[0]**2
-
-#correlation ratio
-def correlation_ratio(X,Y):
-    mean_x = np.mean(X)
-    mean_y = np.mean(Y)
-    mean = (mean_x + mean_y)/2
-    cat_disp = len(X)*(mean_x - mean)**2 + len(Y)*(mean_y - mean)**2
-    disp_x = sum([(x - mean)**2 for x in X])
-    disp_y = sum([(y - mean)**2 for y in Y])
-    return cat_disp/(disp_x+disp_y)
+r2 = lambda X,Y: (stats.pearsonr(X,Y)[0])**2
 
 #nonlinear correlation ratio based on kernel estimate of function
-def h2(X,Y):
+def n2(X,Y):
     gauss_ker = lambda x,o: np.exp(-((x/o)**2)/2)/(o*np.sqrt(2*np.pi))
-    mean_y = np.mean(Y)
-    SS_y = sum([(y - mean_y)**2 for y in Y])
+    SS_y = sum([(y - np.mean(Y))**2 for y in Y])
     o = 1.06*np.std(Y)*len(Y)**.2
-    plt.plot(X,[sum([Y[i]*gauss_ker(X-x,o)[i] for i in range(len(Y))])/sum(gauss_ker(X-x,o)) for x in X])
-    SS_res = sum([(y - sum([Y[i]*gauss_ker(X-x,o)[i] for i in range(len(Y))]))**2 for x,y in zip(X,Y)])
-    h2 = 1 - SS_res/SS_y
-    return h2
+    SS_res = sum([(y - sum([Y[i]*gauss_ker(X-x,o)[i] for i in range(len(Y))])/sum(gauss_ker(X-x,o)))**2 for x,y in zip(X,Y)])
+    n2 = 1 - SS_res/SS_y
+    return n2
 
 #partial based methods
 def partial_method(X, method):
@@ -207,7 +201,7 @@ def MVAR_fit(X,p):
             G[v*i:v*(i+1) , v*j:v*(j+1)] = cov[abs(j-i)]
     
     cov_list = np.concatenate(cov[1:],axis=0)
-    phi = linalg.lstsq(G, cov_list)[0]
+    phi = lin.lstsq(G, cov_list)[0]
     phi = np.reshape(phi,(p,v,v))
     for k in range(p):
         phi[k] = phi[k].T
@@ -265,7 +259,7 @@ def PDC(A, sigma=None, n_fft=None):
 
     for i in range(n_fft):
         B = H[i]
-        B = linalg.inv(B)
+        B = lin.inv(B)
         V = np.abs(np.dot(B.T.conj(), B * (1. / sigma[:, None])))
         V = np.diag(V)  # denominator squared
         P[i] = np.abs(B * (1. / np.sqrt(sigma))[None, :]) / np.sqrt(V)[None, :]
