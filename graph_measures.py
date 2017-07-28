@@ -9,6 +9,8 @@ import scipy.linalg as lin
 import math
 from scipy.fftpack import fft,fftfreq
 import itertools
+from scipy.stats import entropy
+
 
 #plot degree distribution of graph
 def degree_distribution(G):    
@@ -53,7 +55,7 @@ def distance(A,B):
     n = len(A)
     return max((n**2 - dis - n)/n**2 * n/(n-1) , 0)
 
-#applies function to all pairs of nodes
+#applies function to all undirected pairs of nodes
 def cross_func(states, func):
     M = np.zeros((len(states), len(states)))
     for i in range(len(states)):
@@ -62,6 +64,16 @@ def cross_func(states, func):
             val = func(states[i,:],states[j,:])
             M[i,j] = val
             M[j,i] = val
+    return M
+
+#applies function to all pairs of nodes
+def dir_cross_func(states, func):
+    M = np.zeros((len(states), len(states)))
+    for i in range(len(states)):
+        for j in range(len(states)):
+            val = func(states[i,:],states[j,:])
+            M[i,j] = val
+        M[i,i] = 0
     return M
 
 #phase synchrony measure
@@ -116,25 +128,26 @@ def kraskov_mi(X, Y, k = 1, est = 1):
 
 #transfer entropy of X onto Y
 def kernel_TE(X, Y):
+   
     xn = X[:-1]
     yn = Y[:-1]
     yn1 = Y[1:]
     n = len(xn)
+    density = np.ptp(xn)*np.ptp(yn)*np.ptp(yn1)/n
     
     gauss_ker = lambda x,o: np.exp(-.5*(x/o)**2)/(o*np.sqrt(2*np.pi))
-    oxn = 1.06*np.std(xn)*n**.2
-    oyn = 1.06*np.std(yn)*n**.2
-    oyn1 = 1.06*np.std(yn1)*n**.2
-    
+    oxn = .2*np.std(xn)*n**.2
+    oyn = .2*np.std(yn)*n**.2
+    oyn1 = .2*np.std(yn1)*n**.2
     TE = 0
     
-    xnk = np.array([gauss_ker(xn-xn[i],oxn) for i in range(n)])
-    ynk = np.array([gauss_ker(yn-yn[i],oyn) for i in range(n)])
-    yn1k = np.array([gauss_ker(yn1-yn1[i],oyn1) for i in range(n)])
-    total = sum(sum(xnk*ynk*yn1k))
-    xnk = xnk/total
-    ynk = ynk/total
-    yn1k = yn1k/total
+    xnk = np.array([gauss_ker(xn-xi,oxn) for xi in xn])
+    ynk = np.array([gauss_ker(yn-yi,oxn) for yi in yn])
+    yn1k = np.array([gauss_ker(yn1-y1i,oxn) for y1i in yn1])
+    
+    xnk = xnk
+    ynk = ynk
+    yn1k = yn1k
 
     for i in range(n):
         pxnynyn1 = sum(xnk[i]*ynk[i]*yn1k[i])/n
@@ -155,9 +168,12 @@ r2 = lambda X,Y: (stats.pearsonr(X,Y)[0])**2
 
 #nonlinear correlation ratio based on kernel estimate of function
 def n2(X,Y):
+    ind = [i[0] for i in sorted(enumerate(X), key=lambda x:x[1])]
+    X = X[ind]
+    Y = Y[ind]
     gauss_ker = lambda x,o: np.exp(-((x/o)**2)/2)/(o*np.sqrt(2*np.pi))
     SS_y = sum([(y - np.mean(Y))**2 for y in Y])
-    o = 1.06*np.std(Y)*len(Y)**.2
+    o = .2*np.std(Y)*len(Y)**.2
     SS_res = sum([(y - sum([Y[i]*gauss_ker(X-x,o)[i] for i in range(len(Y))])/sum(gauss_ker(X-x,o)))**2 for x,y in zip(X,Y)])
     n2 = 1 - SS_res/SS_y
     return n2
@@ -265,3 +281,142 @@ def PDC(A, sigma=None, n_fft=None):
         P[i] = np.abs(B * (1. / np.sqrt(sigma))[None, :]) / np.sqrt(V)[None, :]
 
     return P, freqs
+
+#PAC from Rehman
+def CFCfilt(signal,freqForAmp,freqForPhase,fs,passbandRipl):
+    numTimeSamples = np.size(signal)
+    frqAmpSize = np.size(freqForAmp)
+    frqPhaseSize = np.size(freqForPhase)
+    oscillations = np.zeros((frqPhaseSize,frqAmpSize,numTimeSamples),dtype=np.complex64)
+    Rp = 40*np.log10((1+passbandRipl)/(1-passbandRipl))
+    for jj in np.arange(frqPhaseSize):
+        for kk in np.arange(frqAmpSize):
+            freq = freqForAmp[kk] # Center Frequency
+            delf = freqForPhase[jj] # Bandwidth
+            if freq > 1.8*delf:
+                freqBand = np.array([freq-1.2*delf, freq+1.2*delf])/(fs/2)
+                bb, aa = sig.cheby1(3,Rp,freqBand,btype='bandpass')
+            else:
+                bb, aa = sig.cheby1(3,Rp,(freq+1.2*delf)/(fs/2))
+            oscillation = sig.filtfilt(bb,aa,signal)
+            oscillations[jj,kk,:] = sig.hilbert(oscillation)
+    return oscillations
+
+def preCFCProc(sigForAmp,sigForPhase,freqForAmp,freqForPhase,fs,bw,passbandRipl):
+    oscilsAmpMod = CFCfilt(sigForAmp,freqForAmp,freqForPhase,fs,passbandRipl)
+    oscilsForPhase = CFCfilt(sigForPhase,freqForPhase,np.array([bw]),fs,passbandRipl)
+    return oscilsAmpMod, oscilsForPhase
+
+def PhaseLocVal(oscAmpMod,oscForPhase,freqForAmp,freqForPhase):
+    PLVs = np.zeros((np.size(freqForPhase),np.size(freqForAmp)))
+    frqAmpSize = np.size(freqForAmp)
+    frqPhaseSize = np.size(freqForPhase)
+    for cc in np.arange(frqAmpSize):
+        for rr in np.arange(frqPhaseSize):
+            ampOsc = np.abs(oscAmpMod[rr,cc,:])
+            phaseOsc = np.angle(oscForPhase[0,rr,:])
+            ampOscPhase = np.angle(sig.hilbert(ampOsc))
+            PLVs[rr,cc] = np.abs(np.mean(np.exp(1j*(phaseOsc - ampOscPhase))))
+            delf = freqForPhase[rr] 
+            ctrfreq = freqForAmp[cc]
+    MIs = np.arcsin(2*PLVs-1)
+    return MIs
+
+def PLVcomod(sigForAmp,sigForPhase,freqForAmp,freqForPhase,fs,bw=4.5,passbandRipl=0.02):
+    oscAmpMod,oscForPhase = preCFCProc(sigForAmp,sigForPhase,freqForAmp,freqForPhase,fs,bw=bw,passbandRipl=passbandRipl)
+    MIs = PhaseLocVal(oscAmpMod,oscForPhase,freqForAmp,freqForPhase)
+    return MIs
+
+def GenLinMod(oscAmpMod,oscForPhase,freqForAmp,freqForPhase):
+    ModCorr = np.zeros((np.size(freqForPhase),np.size(freqForAmp)))
+    frqAmpSize = np.size(freqForAmp)
+    frqPhaseSize = np.size(freqForPhase)
+    for cc in np.arange(frqAmpSize):
+        for rr in np.arange(frqPhaseSize):
+            ampOsc = np.abs(oscAmpMod[rr,cc,:])
+            phaseOsc = np.angle(oscForPhase[0,rr,:])
+            X = np.matrix(np.column_stack((np.cos(phaseOsc),
+                    np.sin(phaseOsc), np.ones(np.size(phaseOsc)))))
+            B = np.linalg.inv((np.transpose(X)*X))* \
+                    np.transpose(X)*np.transpose(np.matrix(ampOsc))
+            ampOscTrend = X*B
+            ampOscResid = ampOsc.flatten()-np.array(ampOscTrend).flatten()
+            rsq = 1-np.var(ampOscResid)/np.var(ampOsc)
+            ModCorr[rr,cc] = np.sqrt(rsq)
+            delf = freqForPhase[rr]
+            ctrfreq = freqForAmp[cc]
+    MIs = np.arctanh(ModCorr)
+    return MIs
+
+def GLMcomod(sigForAmp,sigForPhase,freqForAmp,freqForPhase,fs,bw=4.5,passbandRipl=0.02):
+    oscAmpMod,oscForPhase = preCFCProc(sigForAmp,sigForPhase,freqForAmp,freqForPhase,fs,bw=bw,passbandRipl=passbandRipl)
+    MIs = GenLinMod(oscAmpMod,oscForPhase,freqForAmp,freqForPhase)
+    return MIs
+
+def PrinCompAnal(MultChannIn):
+    MultChannInCov = np.cov(MultChannIn)
+    PrinVals, PrinComps = np.linalg.eig(MultChannInCov)
+    return PrinVals, PrinComps
+
+def zScoredMVL(TwoChannIn):
+    XPrinVals, XPrinComps = PrinCompAnal(TwoChannIn)
+    meanVect = np.array([np.mean(TwoChannIn[0,:]), np.mean(TwoChannIn[1,:])])
+    theta = np.arccos(np.dot(meanVect,XPrinComps[0,:])/np.linalg.norm(meanVect))
+    R = np.sqrt((np.sqrt(XPrinVals[0])*np.cos(theta))**2+(np.sqrt(XPrinVals[1])*np.sin(theta))**2)
+    zScore = np.linalg.norm(meanVect)/R
+    return zScore
+
+def zScoredMV_PCA(oscAmpMod,oscForPhase,freqForAmp,freqForPhase):
+    MIs = np.zeros((np.size(freqForPhase),np.size(freqForAmp)))
+    MVLs = np.zeros((np.size(freqForPhase),np.size(freqForAmp)))
+    frqAmpSize = np.size(freqForAmp)
+    frqPhaseSize = np.size(freqForPhase)
+    for cc in np.arange(frqAmpSize):
+        for rr in np.arange(frqPhaseSize):
+            ampOsc = np.abs(oscAmpMod[rr,cc,:])
+            phaseOsc = np.angle(oscForPhase[0,rr,:])
+            phasor = ampOsc*np.exp(1j*phaseOsc)
+            MVLs[rr,cc] = np.abs(np.mean(phasor))
+            phasorComponents = np.row_stack((np.real(phasor), np.imag(phasor)))
+            MIs[rr,cc] = zScoredMVL(phasorComponents)
+            delf = freqForPhase[rr]
+            ctrfreq = freqForAmp[cc]
+    return MIs, MVLs
+
+def zScoreMVcomod(sigForAmp,sigForPhase,freqForAmp,freqForPhase,fs,bw=4.5,passbandRipl=0.02):
+    oscAmpMod,oscForPhase = preCFCProc(sigForAmp,sigForPhase,freqForAmp,
+        freqForPhase,fs,bw=bw,passbandRipl=passbandRipl)
+    MIs, MVLs = zScoredMV_PCA(oscAmpMod,oscForPhase,freqForAmp,freqForPhase)
+    return MIs, MVLs
+
+
+def KullLeibDiv(P, Q = None):
+    if Q == None: 
+        KLDiv = np.log(np.size(P)) - entropy(P)
+    else:
+        KLDiv = entropy(P,Q)
+    return KLDiv/np.size(P)
+
+def KullLeibBin(oscAmpMod,oscForPhase,freqForAmp,freqForPhase,n):
+    phaseBins = np.linspace(-np.pi,np.pi,n+1)
+    highFreqAmplitude = np.zeros(n)
+    MIs = np.zeros((np.size(freqForPhase),np.size(freqForAmp)))
+    frqAmpSize = np.size(freqForAmp)
+    frqPhaseSize = np.size(freqForPhase)
+    for cc in np.arange(frqAmpSize):
+        for rr in np.arange(frqPhaseSize):
+            amplitudes = np.abs(oscAmpMod[rr,cc,:])
+            phases = np.angle(oscForPhase[0,rr,:])
+            for kk in np.arange(n):
+                amps = amplitudes[(phases > phaseBins[kk]) & (phases <= phaseBins[kk+1])]
+                highFreqAmplitude[kk] = np.mean(amps)
+            MIs[rr,cc] = KullLeibDiv(highFreqAmplitude)
+            delf = freqForPhase[rr]
+            ctrfreq = freqForAmp[cc]
+    return MIs
+
+def KLDivMIcomod(sigForAmp,sigForPhase,freqForAmp,freqForPhase,fs,bw=4.5,passbandRipl=0.02,n=36):
+    oscAmpMod,oscForPhase = preCFCProc(sigForAmp,sigForPhase,freqForAmp,
+        freqForPhase,fs,bw=bw,passbandRipl=passbandRipl)
+    MIs = KullLeibBin(oscAmpMod,oscForPhase,freqForAmp,freqForPhase,n)
+    return MIs
