@@ -42,17 +42,15 @@ def generate_model():
 list_of_measures = []
 
 u_p_s = lambda X: gm.cross_func(X,gm.phase_synchrony)
-p_p_s= lambda X: gm.partial_method(X,gm.phase_synchrony)
 list_of_measures.append(u_p_s)
-list_of_measures.append(p_p_s)
 
 u_c = lambda X: gm.cross_func(X,gm.correlation)
 p_c = lambda X: gm.partial_method(X,gm.correlation)
 list_of_measures.append(u_c)
 list_of_measures.append(p_c)
 
-u_ch = lambda X: gm.cross_func(X,gm.coherence)
-p_ch = lambda X: gm.partial_method(X,gm.coherence)
+u_ch = lambda X: gm.cross_func(np.real(X),gm.coherence)
+p_ch = lambda X: gm.partial_method(np.real(X),gm.coherence)
 list_of_measures.append(u_ch)
 list_of_measures.append(p_ch)
 
@@ -60,6 +58,7 @@ u_mi = lambda X: gm.cross_func(np.real(X),gm.kraskov_mi)
 p_mi = lambda X: gm.partial_method(np.real(X),gm.kraskov_mi)
 list_of_measures.append(u_mi)
 list_of_measures.append(p_mi)
+
 
 u_te = lambda X: gm.cross_func(np.real(X),gm.kernel_TE)
 p_te = lambda X: gm.partial_method(np.real(X),gm.kernel_TE)
@@ -150,9 +149,28 @@ def thresh_array(arr, t, greater_than = True):
     return thr_arr
 
 #add complex noise to signal
-add_noise = lambda X,dev: X + np.random.normal(0,dev,X.shape) + 1j*np.random.normal(0,dev,X.shape)
+white_noise = lambda X,dev: X + np.random.normal(0,dev,X.shape) + 1j*np.random.normal(0,dev,X.shape)
 
+downsample = lambda X,step: X[:,0:-1:step]
 
+shorten = lambda X, l: X[:,0:l]
+
+electrode_inv = lambda X,A: A.T * np.linalg.inv(A*A.T) * A * X
+
+minus_reference = lambda X: X - np.mean(X,0)
+
+time_delay = lambda X,delays: np.array([node[d:(len(X[0]) - max(delays) + d)] for node,d in zip(X,delays)])
+
+def colored_noise(X, func, dev):
+    def get_noise():
+        N = len(X[0])
+        f = np.array([x for x in range(N)])
+        PSD = lambda f: 1/f**2
+        mag = np.sqrt(PSD(f))
+        phase = 2*np.pi*np.random.random(N)
+        FFT = mag * np.exp(1j*phase)
+        return np.fft.ifft(FFT)
+    return [sig + get_noise() for sig in X]
 
 if __name__ == '__main__':
     

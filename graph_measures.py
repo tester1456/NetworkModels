@@ -85,7 +85,7 @@ def phase_synchrony(X,Y):
 correlation = lambda X,Y: np.real(np.correlate(X,Y)/len(X))
 
 #coherence
-coherence = lambda X,Y: max(sig.coherence(X,Y)[1])
+coherence = lambda X,Y: np.mean(sig.coherence(X,Y)[1])
 
 #mutual information measure using KNN Kraskov 2004
 def kraskov_mi(X, Y, k = 1, est = 1):
