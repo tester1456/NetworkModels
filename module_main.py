@@ -9,35 +9,6 @@ import network_modules as nm
 import graph_measures as gm
 import pickle
 
-
-#model generator
-def generate_model():
-    n = 25
-    m = 2
-    distributions = [(n,0,2*np.pi,'uniform'),(n,10,2,'normal')]
-    states = nm.create_vec_states(distributions)
-    z = np.cos(states[:,0]) + 1j * np.sin(states[:,0])
-    w = 1j * states[:,1]
-    x = [[a,b] for a,b in zip(z,w)]
-
-    def currynode(w):
-        def node(x):   #node function
-            return np.array([1j * x[0] * w + x[0]*(1-abs(x[0])),0*1j]) # apply limit cycle term to keep in a circle
-        return node
-
-    h = [currynode(w) for w in states[:,1]]
-
-    def f(x,y):
-        K = 1
-        phi = np.angle(y[0])-np.angle(x[0])
-        return np.array([1j * x[0] * complex(K*np.sin(phi),0),0*1j])
-
-    G = nx.barabasi_albert_graph(n, m)
-    oscillator = nm.nmodel(G,x,h,f)
-    oscillator.run(10)
-
-    return oscillator
-
 #interfacing with measures
 list_of_measures = []
 
@@ -60,14 +31,14 @@ list_of_measures.append(u_mi)
 list_of_measures.append(p_mi)
 
 
-u_te = lambda X: gm.cross_func(np.real(X),gm.kernel_TE)
-p_te = lambda X: gm.partial_method(np.real(X),gm.kernel_TE)
+u_te = lambda X: gm.cross_func(np.real(X),gm.kernel_TE)  #
+p_te = lambda X: gm.partial_method(np.real(X),gm.kernel_TE)  #
 list_of_measures.append(u_te)
 list_of_measures.append(p_te)
 
 
-u_gc = lambda X: gm.cross_func(np.real(X),gm.granger_causality)
-p_gc = lambda X: gm.partial_method(np.real(X),gm.granger_causality)
+u_gc = lambda X: gm.cross_func(np.real(X),gm.granger_causality)  #
+p_gc = lambda X: gm.partial_method(np.real(X),gm.granger_causality)  #
 list_of_measures.append(u_gc)
 list_of_measures.append(p_gc)
 
@@ -81,7 +52,7 @@ p_n2 = lambda X: gm.partial_method(np.real(X),gm.n2)
 list_of_measures.append(u_n2)
 list_of_measures.append(p_n2)
 
-def PDC_func(X):
+def PDC_func(X):  #
     X = np.real(X) 
     p = 2
     A = gm.MVAR_fit(X,p)
@@ -91,7 +62,7 @@ def PDC_func(X):
     return P_mat
 list_of_measures.append(PDC_func)
 
-def DTF_func(X):
+def DTF_func(X):  #
     X = np.real(X) 
     p = 2
     A = gm.MVAR_fit(X,p)
@@ -107,19 +78,19 @@ freqForPhase = np.arange(1,61)/4+1
 sr = 1000
 bw = 1.5
 
-KBL = lambda X,Y: sum(sum(gm.KLDivMIcomod(X,Y,freqForAmp,freqForPhase,sr,bw)))
+KBL = lambda X,Y: sum(sum(gm.KLDivMIcomod(X,Y,freqForAmp,freqForPhase,sr,bw)))  #
 d_KBL = lambda X: gm.dir_cross_func(np.real(X), KBL)
 list_of_measures.append(d_KBL)
 
-MV = lambda X,Y: sum(sum(gm.zScoreMVcomod(X,Y,freqForAmp,freqForPhase,sr,bw)[0]))
+MV = lambda X,Y: sum(sum(gm.zScoreMVcomod(X,Y,freqForAmp,freqForPhase,sr,bw)[0]))  #
 d_MV = lambda X: gm.dir_cross_func(np.real(X), MV)
 list_of_measures.append(d_MV)
 
-PLV = lambda X,Y: sum(sum(gm.PLVcomod(X,Y,freqForAmp,freqForPhase,sr,bw)))
+PLV = lambda X,Y: sum(sum(gm.PLVcomod(X,Y,freqForAmp,freqForPhase,sr,bw)))  #
 d_PLV = lambda X: gm.dir_cross_func(np.real(X), PLV)
 list_of_measures.append(d_PLV)
 
-GLM = lambda X,Y: sum(sum(gm.GLMcomod(X,Y,freqForAmp,freqForPhase,sr,bw)))
+GLM = lambda X,Y: sum(sum(gm.GLMcomod(X,Y,freqForAmp,freqForPhase,sr,bw)))  #
 d_GLM = lambda X: gm.dir_cross_func(np.real(X), GLM)
 list_of_measures.append(d_GLM)
 
@@ -140,61 +111,93 @@ def gen_threshold(adj_data, func_data, greater_than = True):
             thr = x
     return thr
 
-#apply threshold t to array
-def thresh_array(arr, t, greater_than = True):
+
+# apply threshold t to array
+def thresh_array(arr, t, greater_than=True):
     if greater_than:
         thr_arr = 1*(arr >= t)
     else:
         thr_arr = 1*(arr <= t)
     return thr_arr
 
-#add complex noise to signal
-white_noise = lambda X,dev: X + np.random.normal(0,dev,X.shape) + 1j*np.random.normal(0,dev,X.shape)
+# Noise sources
+white_noise = lambda X,dev: X + np.random.normal(0, dev, X.shape) + 1j*np.random.normal(0, dev, X.shape)  #
 
-downsample = lambda X,step: X[:,0:-1:step]
+downsample = lambda X,step: X[:, 0:-1:step]  #
 
-shorten = lambda X, l: X[:,0:l]
+shorten = lambda X, l: X[:, 0:l]  #
 
-electrode_inv = lambda X,A: A.T * np.linalg.inv(A*A.T) * A * X
+electrode_inv = lambda X , A: A.T * np.linalg.inv(A*A.T) * A * X  #
 
-minus_reference = lambda X: X - np.mean(X,0)
+minus_reference = lambda X: X - np.mean(X, 0)  #
 
-time_delay = lambda X,delays: np.array([node[d:(len(X[0]) - max(delays) + d)] for node,d in zip(X,delays)])
+time_delay = lambda X,delays: np.array([node[d:(len(X[0]) - max(delays) + d)] for node, d in zip(X, delays)])  #
+
 
 def colored_noise(X, func, dev):
     def get_noise():
         N = len(X[0])
-        f = np.array([x for x in range(N)])
-        PSD = lambda f: 1/f**2
-        mag = np.sqrt(PSD(f))
+        f = np.array([x + 1 for x in range(N)]) / 4
+        mag = np.sqrt(func(f))
         phase = 2*np.pi*np.random.random(N)
         FFT = mag * np.exp(1j*phase)
-        return np.fft.ifft(FFT)
-    return [sig + get_noise() for sig in X]
-
-if __name__ == '__main__':
+        tsig = np.fft.ifft(FFT)
+        tsig = (tsig - np.mean(tsig)) / max(abs(tsig)) * 2 * dev
+        return tsig
+    return np.array([sig + get_noise() for sig in X])
     
-    print('Running main')    
-
-    #run n monte carlo simulations for time t get adjacency and time series data
-    time_data = []
+def generate_data():
+    # run n monte carlo simulations for time t get adjacency and time data
+    k_data = []
+    wc_data = []
+    o_data = []
     adj_data = []
-    n = 1
+    n = 100
     for i in range(n):
-        oscillator  = generate_model()
-        t = 1
-        oscillator.run(t)
-        time_data.append(oscillator.x)
-        adj_data.append(nx.to_numpy_matrix(oscillator.G))
-    with open('time_data' ,'wb') as f:
-        pickle.dump(time_data,f)
+        nodes = 25
+        G = generate_graph(nodes)
+        adj_data.append(nx.to_numpy_matrix(G))
+
+        kmodel = generate_k_model(nodes, G)
+        wcmodel = generate_wc_model(nodes, G)
+        omodel = generate_o_model(nodes, G)
+
+        t = 100
+        kmodel.run(t)
+        k_data.append(kmodel.x)
+        wcmodel.run(t)
+        wc_data.append(wcmodel.x)
+        omodel.run(t)
+        o_data.append(omodel.x)
+
+    with open('k_data', 'wb') as f:
+        pickle.dump(k_data, f)
+    with open('wc_data', 'wb') as f:
+        pickle.dump(wc_data, f)
+    with open('o_data', 'wb') as f:
+        pickle.dump(o_data, f)
+
     with open('adj_data', 'wb') as f:
-        pickle.dump(adj_data,f)
+        pickle.dump(adj_data, f)
 
     print('Models Generated')
 
 
-    #generate connectivity matrixes for each measure for normal
+def generate_noisy_data(data):
+    with open('k_data', 'rb') as pickle_data:
+        trial_data = pickle.load(pickle_data)
+
+
+white_noise
+downsample
+shorten
+electrode_inv
+minus_reference
+time_delay
+colored_noise
+
+'''
+    # generate connectivity matrixes for each measure for normal
     with open('time_data' , 'rb') as pickle_data:
         trial_data = np.array(pickle.load(pickle_data))
         adj_data = []
@@ -206,6 +209,23 @@ if __name__ == '__main__':
             adj_data.append(trial_adj)
             print('Trial Done')
         with open('measure_normal', 'wb') as f:
-        	 f.write(pickle.dumps(adj_data))
-    
+            f.write(pickle.dumps(adj_data))
+
         print('Measures conducted')
+'''
+
+if __name__ == '__main__':
+
+    print('Running main')
+
+    generate_data()
+
+    with open('k_data', 'rb') as pickle_data:
+        trial_data = pickle.load(pickle_data)
+        generate_noisy_data(trial_data)
+    with open('wc_data', 'rb') as pickle_data:
+        trial_data = pickle.load(pickle_data)
+        generate_noisy_data(trial_data)
+    with open('o_data', 'rb') as pickle_data:
+        trial_data = pickle.load(pickle_data)
+        generate_noisy_data(trial_data)

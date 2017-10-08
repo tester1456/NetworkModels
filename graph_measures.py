@@ -7,19 +7,19 @@ import scipy.stats as stats
 import statsmodels.tsa.stattools
 import scipy.linalg as lin
 import math
-from scipy.fftpack import fft,fftfreq
+from scipy.fftpack import fft, fftfreq
 import itertools
 from scipy.stats import entropy
 
 
-#plot degree distribution of graph
-def degree_distribution(G):    
-    degree_sequence=sorted([d for n,d in G.degree().items()], reverse=True) # degree sequence
-    degreeCount=collections.Counter(degree_sequence)
+# plot degree distribution of graph
+def degree_distribution(G):
+    degree_sequence = sorted([d for n, d in G.degree().items()], reverse = True)  # degree sequence
+    degreeCount = collections.Counter(degree_sequence)
     deg, cnt = zip(*degreeCount.items())
 
     fig, ax = plt.subplots()
-    plt.plot(deg, cnt,'.')
+    plt.plot(deg, cnt, '.')
 
     plt.title("Degree Distribution")
     plt.ylabel("Count")
@@ -28,7 +28,7 @@ def degree_distribution(G):
     ax.set_xticklabels(deg)
     plt.show()
 
-#graph similiarity index
+# graph similiarity index
 def jaccard(A, B):
     andsum = sum([sum([i and j for i,j in zip(a,b)]) for a,b in zip(A,B)])
     orsum = sum([sum([i or j for i,j in zip(a,b)]) for a,b in zip(A,B)])
